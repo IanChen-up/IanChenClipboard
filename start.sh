@@ -4,7 +4,6 @@ cd "$(dirname "$0")"
 # 清理旧进程
 pkill -f "app.py"
 pkill -f "MacClipboard"
-pkill -f "IanChenClipboard"
 
 if [ ! -d "venv" ]; then
     echo "创建 Python 虚拟环境..."

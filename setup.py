@@ -5,7 +5,7 @@ DATA_FILES = []
 OPTIONS = {
     'argv_emulation': True,
     'plist': {
-        'LSUIElement': False, # 取消隐藏 Dock 图标，作为正常应用运行
+        'LSUIElement': False, # 取消隐藏 Dock 图标，作为正常应用运行以便请求权限
         'CFBundleName': 'IanChenClipboard',
         'CFBundleDisplayName': 'IanChenClipboard',
         'CFBundleIdentifier': 'com.custom.ianchenclipboard',
@@ -13,7 +13,8 @@ OPTIONS = {
         'CFBundleShortVersionString': '2.0.0',
         'NSAppleEventsUsageDescription': 'IanChenClipboard needs to monitor hotkeys',
     },
-    'packages': ['PyQt6'],
+    'packages': ['PyQt6', 'pynput'],
+    'includes': ['pynput.keyboard._darwin', 'pynput.mouse._darwin'],
 }
 
 setup(

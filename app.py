@@ -9,13 +9,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                              QListWidget, QListWidgetItem, QLineEdit, QLabel, 
                              QPushButton, QInputDialog, QMessageBox, QAbstractItemView)
 from PyQt6.QtGui import QCursor, QFont, QIcon, QPixmap
-from PyQt6.QtCore import Qt, QEvent, QTimer, QSize, QPropertyAnimation, QEasingCurve, QThread, pyqtSignal
-
-# 导入全局快捷键监听
-from pynput import keyboard
-import threading
-import time
-
+from PyQt6.QtCore import Qt, QEvent, QTimer, QSize, QPropertyAnimation, QEasingCurve
 
 # 导入 Mac 底层 API
 import objc
@@ -53,47 +47,7 @@ class TrayHandler(NSObject):
         self.callback()
 
 # ==========================================
-# 全局快捷键监听线程 (Option + V)
-# ==========================================
-class HotkeyThread(QThread):
-    hotkey_triggered = pyqtSignal()
-    
-    def __init__(self):
-        super().__init__()
-        self.running = True
-        
-    def run(self):
-        from pynput.keyboard import Key, Listener
-        
-        # 记录按下的键
-        current_keys = set()
-        
-        def on_press(key):
-            if key == Key.alt or key == Key.cmd:
-                current_keys.add(key)
-            elif hasattr(key, 'char') and key.char == 'v':
-                if Key.alt in current_keys:
-                    self.hotkey_triggered.emit()
-                
-        def on_release(key):
-            try:
-                current_keys.remove(key)
-            except KeyError:
-                pass
-                
-        self.listener = Listener(on_press=on_press, on_release=on_release)
-        self.listener.start()
-        
-        while self.running:
-            time.sleep(0.5)
-            
-    def stop(self):
-        self.running = False
-        if hasattr(self, 'listener'):
-            self.listener.stop()
-
-# ==========================================
-# 漂亮的主 UI 界面 (高颜值、内嵌搜索)
+# 2. 漂亮的主 UI 界面 (高颜值、内嵌搜索)
 # ==========================================
 class ClipboardApp(QWidget):
     def __init__(self):
@@ -111,11 +65,6 @@ class ClipboardApp(QWidget):
         self.load_data()
         self.init_ui()
         self.apply_theme()
-        
-        # 启动全局快捷键监听 (Option + V)
-        self.hotkey_thread = HotkeyThread()
-        self.hotkey_thread.hotkey_triggered.connect(self.toggle_window)
-        self.hotkey_thread.start()
         
         # 挂载原生托盘图标
         self.tray_handler = TrayHandler.alloc().initWithCallback_(self.toggle_window)
@@ -137,9 +86,7 @@ class ClipboardApp(QWidget):
     def save_settings(self):
         try:
             with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "is_dark_mode": self.is_dark_mode
-                }, f)
+                json.dump({"is_dark_mode": self.is_dark_mode}, f)
         except:
             pass
 
@@ -175,8 +122,8 @@ class ClipboardApp(QWidget):
             print(f"Error saving data: {e}")
 
     def init_ui(self):
-        # 设置为普通窗口，以便用户可以用 Cmd+Tab 找到，同时去掉边框
-        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        # 无边框 + 悬浮窗 + 圆角暗色主题
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.resize(360, 520)
         
@@ -248,12 +195,6 @@ class ClipboardApp(QWidget):
         self.save_settings()
         self.apply_theme()
         self.refresh_list()
-
-    def closeEvent(self, event):
-        if hasattr(self, 'hotkey_thread'):
-            self.hotkey_thread.stop()
-            self.hotkey_thread.wait()
-        event.accept()
 
     def apply_theme(self):
         if self.is_dark_mode:
@@ -670,11 +611,13 @@ class ClipboardApp(QWidget):
             self.refresh_list()
             self.search_input.clear()
             
-            # 如果是从托盘点击或者快捷键触发，光标位置会变
-            # 居中在当前屏幕
-            screen = QApplication.primaryScreen().geometry()
-            x = (screen.width() - self.width()) // 2
-            y = (screen.height() - self.height()) // 2
+            # 定位在鼠标点击处（右上角状态栏下方）
+            cursor_pos = QCursor.pos()
+            x = cursor_pos.x() - self.width() / 2
+            y = cursor_pos.y() + 10 # 留点间距
+            
+            if x < 0: x = 0
+            if y < 0: y = 0
             
             self.move(int(x), int(y))
             self.show()
@@ -692,6 +635,12 @@ class ClipboardApp(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    
+    # 隐藏 Dock 栏图标
+    try:
+        NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+    except:
+        pass
         
     # 单例模式检测：防止重复打开
     lock_file_path = os.path.join(support_dir, "app.lock")
